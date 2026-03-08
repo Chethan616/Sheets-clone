@@ -64,6 +64,10 @@ export function Grid({
   const parentRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const isSelectingRef = useRef(false);
+  // Tracks the cell where a mouse-drag selection started (fixes stale-closure on fast drags)
+  const dragStartCellRef = useRef<CellPosition | null>(null);
+  // Tracks the fixed anchor for Shift+Arrow keyboard range selection
+  const selectionAnchorRef = useRef<CellPosition | null>(null);
 
   // Ref to track that editing was initiated but React hasn't re-rendered yet (stale closure fix)
   const pendingEditRef = useRef(false);
@@ -160,72 +164,97 @@ export function Grid({
         const inputEl = editInputRef.current;
         const inputFocused = inputEl && document.activeElement === inputEl;
 
-        // Buffer printable keys when input is not focused yet
         if (!inputFocused && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
           e.preventDefault();
           onEditChange((prev: string) => prev + e.key);
           return;
         }
-
         if (!inputFocused && e.key === 'Backspace') {
           e.preventDefault();
           onEditChange((prev: string) => prev.slice(0, -1));
           return;
         }
-
         if (e.key === 'Enter') {
           e.preventDefault();
           onEditCommit();
-          if (activeCell.row + 1 < rowCount) {
-            onCellSelect({ row: activeCell.row + 1, col: activeCell.col });
-          }
+          if (activeCell.row + 1 < rowCount) onCellSelect({ row: activeCell.row + 1, col: activeCell.col });
         } else if (e.key === 'Escape') {
           e.preventDefault();
           onEditCancel();
         } else if (e.key === 'Tab') {
           e.preventDefault();
           onEditCommit();
-          const nextVisual = e.shiftKey ? Math.max(0, visualCol - 1) : Math.min(colCount - 1, visualCol + 1);
-          const nextLogical = getLogicalCol(nextVisual);
-          onCellSelect({ row: activeCell.row, col: nextLogical });
+          const nv = e.shiftKey ? Math.max(0, visualCol - 1) : Math.min(colCount - 1, visualCol + 1);
+          onCellSelect({ row: activeCell.row, col: getLogicalCol(nv) });
         }
         return;
       }
 
-      // Navigation mode
+      // Helper for Shift+Arrow: set anchor on first call, return new "moving end"
+      const shiftEnd = (rowDelta: number, colDelta: number): CellPosition => {
+        if (!selectionAnchorRef.current) selectionAnchorRef.current = { ...activeCell };
+        const anchor = selectionAnchorRef.current;
+        const cur = selectionRange
+          ? (selectionRange.start.row === anchor.row && selectionRange.start.col === anchor.col
+              ? selectionRange.end
+              : selectionRange.start)
+          : activeCell;
+        const newVis = Math.max(0, Math.min(colCount - 1, getVisualIndex(cur.col) + colDelta));
+        return { row: Math.max(0, Math.min(rowCount - 1, cur.row + rowDelta)), col: getLogicalCol(newVis) };
+      };
+
       switch (e.key) {
-        case 'ArrowUp':
+        case 'ArrowUp': {
           e.preventDefault();
-          if (activeCell.row > 0) {
-            onCellSelect({ row: activeCell.row - 1, col: activeCell.col });
+          if (e.shiftKey) {
+            const end = shiftEnd(-1, 0);
+            onSelectionChange({ start: selectionAnchorRef.current ?? activeCell, end });
+          } else {
+            selectionAnchorRef.current = null;
+            if (activeCell.row > 0) onCellSelect({ row: activeCell.row - 1, col: activeCell.col });
           }
           break;
-        case 'ArrowDown':
+        }
+        case 'ArrowDown': {
           e.preventDefault();
-          if (activeCell.row + 1 < rowCount) {
-            onCellSelect({ row: activeCell.row + 1, col: activeCell.col });
+          if (e.shiftKey) {
+            const end = shiftEnd(1, 0);
+            onSelectionChange({ start: selectionAnchorRef.current ?? activeCell, end });
+          } else {
+            selectionAnchorRef.current = null;
+            if (activeCell.row + 1 < rowCount) onCellSelect({ row: activeCell.row + 1, col: activeCell.col });
           }
           break;
-        case 'ArrowLeft':
+        }
+        case 'ArrowLeft': {
           e.preventDefault();
-          if (visualCol > 0) {
-            const logical = getLogicalCol(visualCol - 1);
-            onCellSelect({ row: activeCell.row, col: logical });
+          if (e.shiftKey) {
+            const end = shiftEnd(0, -1);
+            onSelectionChange({ start: selectionAnchorRef.current ?? activeCell, end });
+          } else {
+            selectionAnchorRef.current = null;
+            if (visualCol > 0) onCellSelect({ row: activeCell.row, col: getLogicalCol(visualCol - 1) });
           }
           break;
-        case 'ArrowRight':
+        }
+        case 'ArrowRight': {
           e.preventDefault();
-          if (visualCol + 1 < colCount) {
-            const logical = getLogicalCol(visualCol + 1);
-            onCellSelect({ row: activeCell.row, col: logical });
+          if (e.shiftKey) {
+            const end = shiftEnd(0, 1);
+            onSelectionChange({ start: selectionAnchorRef.current ?? activeCell, end });
+          } else {
+            selectionAnchorRef.current = null;
+            if (visualCol + 1 < colCount) onCellSelect({ row: activeCell.row, col: getLogicalCol(visualCol + 1) });
           }
           break;
-        case 'Tab':
+        }
+        case 'Tab': {
           e.preventDefault();
-          const nextVisual = e.shiftKey ? Math.max(0, visualCol - 1) : Math.min(colCount - 1, visualCol + 1);
-          const nextLogical = getLogicalCol(nextVisual);
-          onCellSelect({ row: activeCell.row, col: nextLogical });
+          selectionAnchorRef.current = null;
+          const nv = e.shiftKey ? Math.max(0, visualCol - 1) : Math.min(colCount - 1, visualCol + 1);
+          onCellSelect({ row: activeCell.row, col: getLogicalCol(nv) });
           break;
+        }
         case 'Enter':
           e.preventDefault();
           onCellDoubleClick(activeCell);
@@ -245,7 +274,6 @@ export function Grid({
           onCellSelect({ row: activeCell.row, col: getLogicalCol(colCount - 1) });
           break;
         default:
-          // Start typing to edit
           if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
             pendingEditRef.current = true;
@@ -255,7 +283,7 @@ export function Grid({
           break;
       }
     },
-    [activeCell, editingCell, rowCount, colCount, onCellSelect, onCellDoubleClick, onEditChange, onEditCommit, onEditCancel, getVisualIndex, getLogicalCol]
+    [activeCell, editingCell, selectionRange, rowCount, colCount, onCellSelect, onCellDoubleClick, onEditChange, onEditCommit, onEditCancel, onSelectionChange, getVisualIndex, getLogicalCol]
   );
 
   // Column resize handlers
@@ -326,22 +354,31 @@ export function Grid({
   }, []);
 
   // Selection handlers
-  const handleCellMouseDown = useCallback((row: number, col: number) => {
+  const handleCellMouseDown = useCallback((row: number, col: number, e: React.MouseEvent) => {
+    if (e.shiftKey && activeCell) {
+      // Shift+click: extend from current active cell without moving it
+      isSelectingRef.current = true;
+      dragStartCellRef.current = activeCell;
+      selectionAnchorRef.current = activeCell;
+      onSelectionChange({ start: activeCell, end: { row, col } });
+      return;
+    }
     isSelectingRef.current = true;
+    dragStartCellRef.current = { row, col };
+    selectionAnchorRef.current = null; // reset keyboard anchor on fresh click
     onCellSelect({ row, col });
     onSelectionChange({ start: { row, col }, end: { row, col } });
-  }, [onCellSelect, onSelectionChange]);
+  }, [activeCell, onCellSelect, onSelectionChange]);
 
+  // Uses dragStartCellRef (not the `activeCell` prop) to avoid stale closure mid-drag
   const handleCellMouseOver = useCallback((row: number, col: number) => {
-    if (isSelectingRef.current && activeCell) {
-      onSelectionChange({ start: activeCell, end: { row, col } });
+    if (isSelectingRef.current && dragStartCellRef.current) {
+      onSelectionChange({ start: dragStartCellRef.current, end: { row, col } });
     }
-  }, [activeCell, onSelectionChange]);
+  }, [onSelectionChange]);
 
   useEffect(() => {
-    const handleMouseUp = () => {
-      isSelectingRef.current = false;
-    };
+    const handleMouseUp = () => { isSelectingRef.current = false; };
     window.addEventListener('mouseup', handleMouseUp);
     return () => window.removeEventListener('mouseup', handleMouseUp);
   }, []);
@@ -460,14 +497,20 @@ export function Grid({
           const logicalCol = getLogicalCol(virtualCol.index);
           const isDragging = draggedCol === virtualCol.index;
           const isOver = dragOverCol === virtualCol.index;
+          // Show a left border when dropping BEFORE this column, right border when dropping AFTER
+          const dropBefore = isOver && draggedCol !== null && draggedCol > virtualCol.index;
+          const dropAfter  = isOver && draggedCol !== null && draggedCol < virtualCol.index;
 
           return (
             <div
               key={`header-${virtualCol.index}`}
               className={cn(
-                'absolute top-0 z-10 flex items-center justify-center border-b border-r border-outline-variant/40 bg-surface-container text-xs font-medium text-on-surface-variant transition-colors',
-                isDragging && 'opacity-50',
-                isOver && 'bg-primary-container/30 ring-2 ring-primary ring-inset z-20'
+                'absolute top-0 z-10 flex items-center justify-center border-b border-r border-outline-variant/40 bg-surface-container text-xs font-medium text-on-surface-variant transition-colors select-none',
+                onColumnReorder && 'cursor-grab active:cursor-grabbing',
+                isDragging && 'opacity-40 bg-primary-container/40',
+                isOver && !dropBefore && !dropAfter && 'bg-primary-container/20',
+                dropBefore && 'border-l-[3px] border-l-primary',
+                dropAfter  && 'border-r-[3px] border-r-primary'
               )}
               style={{
                 left: virtualCol.start + HEADER_WIDTH,
@@ -534,11 +577,16 @@ export function Grid({
               const format = getCellFormat(id);
               const displayValue = getCellDisplayValue(id);
 
-              const isSelected = selectionRange && 
-                  row >= Math.min(selectionRange.start.row, selectionRange.end.row) &&
-                  row <= Math.max(selectionRange.start.row, selectionRange.end.row) &&
-                  col >= Math.min(selectionRange.start.col, selectionRange.end.col) &&
-                  col <= Math.max(selectionRange.start.col, selectionRange.end.col);
+              const selMinRow = selectionRange ? Math.min(selectionRange.start.row, selectionRange.end.row) : 0;
+              const selMaxRow = selectionRange ? Math.max(selectionRange.start.row, selectionRange.end.row) : 0;
+              const selMinCol = selectionRange ? Math.min(selectionRange.start.col, selectionRange.end.col) : 0;
+              const selMaxCol = selectionRange ? Math.max(selectionRange.start.col, selectionRange.end.col) : 0;
+              // For merged-cell anchors, the cell is selected if ANY part of the merge overlaps the selection
+              const isSelected = selectionRange && (
+                merge
+                  ? !(merge.endRow < selMinRow || merge.startRow > selMaxRow || merge.endCol < selMinCol || merge.startCol > selMaxCol)
+                  : (row >= selMinRow && row <= selMaxRow && col >= selMinCol && col <= selMaxCol)
+              );
 
               return (
                 <div
@@ -563,7 +611,7 @@ export function Grid({
                       : {}),
                   }}
                   onMouseDown={(e) => {
-                    if (e.button === 0) handleCellMouseDown(row, col);
+                    if (e.button === 0) handleCellMouseDown(row, col, e);
                   }}
                   onMouseEnter={() => handleCellMouseOver(row, col)}
                   onDoubleClick={() => onCellDoubleClick({ row, col })}

@@ -44,7 +44,7 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
   const [columnOrder, setColumnOrder] = useState<number[]>(
     doc.columnOrder || Array.from({ length: doc.colCount }, (_, i) => i)
   );
-  const [mergedCells, setMergedCells] = useState<MergedRegion[]>([]);
+  const [mergedCells, setMergedCells] = useState<MergedRegion[]>(doc.mergedCells || []);
 
   // Current active cell reference string (e.g., "A1")
   const activeCellRef = activeCell ? cellId(activeCell.row, activeCell.col) : '';
@@ -236,7 +236,9 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
       (m) => m.startRow === startRow && m.endRow === endRow && m.startCol === startCol && m.endCol === endCol
     );
     if (existingIdx >= 0) {
-      setMergedCells((prev) => prev.filter((_, i) => i !== existingIdx));
+      const newMerges = mergedCells.filter((_, i) => i !== existingIdx);
+      setMergedCells(newMerges);
+      updateDocument(doc.id, { mergedCells: newMerges });
       return;
     }
 
@@ -262,8 +264,9 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
 
     filtered.push({ startRow, startCol, endRow, endCol });
     setMergedCells(filtered);
+    updateDocument(doc.id, { mergedCells: filtered });
     trigger('success');
-  }, [selectionRange, mergedCells, cells, updateCell, trigger]);
+  }, [selectionRange, mergedCells, cells, updateCell, trigger, doc.id]);
 
   const canMerge = !!(selectionRange && (
     selectionRange.start.row !== selectionRange.end.row ||
@@ -362,7 +365,13 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
         return doc.columnOrder!;
       });
     }
-  }, [doc.columnWidths, doc.rowHeights, doc.columnOrder]);
+    if (doc.mergedCells !== undefined) {
+      setMergedCells(prev => {
+        if (JSON.stringify(prev) === JSON.stringify(doc.mergedCells)) return prev;
+        return doc.mergedCells!;
+      });
+    }
+  }, [doc.columnWidths, doc.rowHeights, doc.columnOrder, doc.mergedCells]);
 
   // Debounced save for layout changes
   useEffect(() => {
@@ -383,6 +392,10 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
         updates.columnOrder = columnOrder;
         changed = true;
       }
+      if (JSON.stringify(mergedCells) !== JSON.stringify(doc.mergedCells || [])) {
+        updates.mergedCells = mergedCells;
+        changed = true;
+      }
 
       if (changed) {
         updateDocument(doc.id, updates);
@@ -390,7 +403,7 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
     }, 2000);
 
     return () => clearTimeout(handler);
-  }, [columnWidths, rowHeights, columnOrder, doc.columnWidths, doc.rowHeights, doc.columnOrder, doc.id]);
+  }, [columnWidths, rowHeights, columnOrder, mergedCells, doc.columnWidths, doc.rowHeights, doc.columnOrder, doc.mergedCells, doc.id]);
 
   return (
     <div className="flex h-screen flex-col bg-surface">

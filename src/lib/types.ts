@@ -43,6 +43,7 @@ export interface SpreadsheetDocument {
   columnWidths?: Record<number, number>;
   rowHeights?: Record<number, number>;
   columnOrder?: number[];
+  mergedCells?: MergedRegion[];
 }
 
 // ─── User Types ─────────────────────────────────────────────────────────────
