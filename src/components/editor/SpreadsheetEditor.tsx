@@ -17,7 +17,7 @@ import { isFormula } from '@/lib/formula/evaluator';
 import { updateDocument } from '@/lib/firestore';
 import { updateCell as fbUpdateCell } from '@/lib/firestore';
 import { exportToCSV, exportToXLSX, downloadCSV } from '@/lib/export';
-import type { SpreadsheetDocument, CellPosition, CellFormat, CellRange, CellData } from '@/lib/types';
+import type { SpreadsheetDocument, CellPosition, CellFormat, CellRange, CellData, MergedRegion } from '@/lib/types';
 
 interface SpreadsheetEditorProps {
   document: SpreadsheetDocument;
@@ -44,6 +44,7 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
   const [columnOrder, setColumnOrder] = useState<number[]>(
     doc.columnOrder || Array.from({ length: doc.colCount }, (_, i) => i)
   );
+  const [mergedCells, setMergedCells] = useState<MergedRegion[]>([]);
 
   // Current active cell reference string (e.g., "A1")
   const activeCellRef = activeCell ? cellId(activeCell.row, activeCell.col) : '';
@@ -103,7 +104,17 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
   const commitEdit = useCallback(() => {
     if (!editingCell || !user) return;
     const id = cellId(editingCell.row, editingCell.col);
-    updateCell(id, editValue);
+
+    let valueToCommit = editValue;
+    // Auto-detect formula patterns (e.g. SUM(A1:A5) → =SUM(A1:A5))
+    if (valueToCommit && !valueToCommit.startsWith('=')) {
+      const formulaPattern = /^(SUM|AVERAGE|AVG|COUNT|MIN|MAX|ABS|ROUND|IF|TRIM|UPPER|LOWER)\s*\(/i;
+      if (formulaPattern.test(valueToCommit)) {
+        valueToCommit = '=' + valueToCommit;
+      }
+    }
+
+    updateCell(id, valueToCommit);
     setEditingCell(null);
     trigger('success');
   }, [editingCell, editValue, updateCell, user, trigger]);
@@ -209,6 +220,55 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
       updateMultipleCells(updates);
     }
   }, [cells, doc.colCount, doc.rowCount, updateMultipleCells]);
+
+  // ─── Merge Cells ──────────────────────────────────────────────────────
+  const handleMergeCells = useCallback(() => {
+    if (!selectionRange) return;
+    const startRow = Math.min(selectionRange.start.row, selectionRange.end.row);
+    const endRow = Math.max(selectionRange.start.row, selectionRange.end.row);
+    const startCol = Math.min(selectionRange.start.col, selectionRange.end.col);
+    const endCol = Math.max(selectionRange.start.col, selectionRange.end.col);
+
+    if (startRow === endRow && startCol === endCol) return; // single cell, nothing to merge
+
+    // Check if this region is already merged → unmerge
+    const existingIdx = mergedCells.findIndex(
+      (m) => m.startRow === startRow && m.endRow === endRow && m.startCol === startCol && m.endCol === endCol
+    );
+    if (existingIdx >= 0) {
+      setMergedCells((prev) => prev.filter((_, i) => i !== existingIdx));
+      return;
+    }
+
+    // Remove any existing merges that overlap with the new region
+    const filtered = mergedCells.filter(
+      (m) => m.endRow < startRow || m.startRow > endRow || m.endCol < startCol || m.startCol > endCol
+    );
+
+    // Move non-anchor cell values into anchor cell if anchor is empty
+    const anchorId = cellId(startRow, startCol);
+    if (!cells[anchorId]?.value) {
+      for (let r = startRow; r <= endRow; r++) {
+        for (let c = startCol; c <= endCol; c++) {
+          if (r === startRow && c === startCol) continue;
+          const id = cellId(r, c);
+          if (cells[id]?.value) {
+            updateCell(anchorId, cells[id].value);
+            break;
+          }
+        }
+      }
+    }
+
+    filtered.push({ startRow, startCol, endRow, endCol });
+    setMergedCells(filtered);
+    trigger('success');
+  }, [selectionRange, mergedCells, cells, updateCell, trigger]);
+
+  const canMerge = !!(selectionRange && (
+    selectionRange.start.row !== selectionRange.end.row ||
+    selectionRange.start.col !== selectionRange.end.col
+  ));
 
   const handleFindAndReplace = useCallback(() => {
     const findStr = prompt('Find what?');
@@ -380,6 +440,8 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
         onExport={handleExport}
         onFindAndReplace={handleFindAndReplace}
         onRemoveDuplicates={handleRemoveDuplicates}
+        onMergeCells={handleMergeCells}
+        canMerge={canMerge}
       />
 
       {/* Formula Bar */}
@@ -413,6 +475,7 @@ export function SpreadsheetEditor({ document: doc }: SpreadsheetEditorProps) {
         onColumnResize={handleColumnResize}
         onRowResize={handleRowResize}
         onColumnReorder={handleColumnReorder}
+        mergedCells={mergedCells}
       />
 
       {/* Status Bar */}

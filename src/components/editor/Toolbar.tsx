@@ -9,9 +9,11 @@ interface ToolbarProps {
   onExport: (type: 'csv' | 'xlsx') => void;
   onFindAndReplace: () => void;
   onRemoveDuplicates: () => void;
+  onMergeCells: () => void;
+  canMerge: boolean;
 }
 
-export function Toolbar({ format, onFormatChange, onExport, onFindAndReplace, onRemoveDuplicates }: ToolbarProps) {
+export function Toolbar({ format, onFormatChange, onExport, onFindAndReplace, onRemoveDuplicates, onMergeCells, canMerge }: ToolbarProps) {
   return (
     <div className="flex h-10 items-center gap-0.5 overflow-x-auto border-b border-outline-variant/40 bg-surface-container-low px-2">
       {/* Bold */}
@@ -114,6 +116,15 @@ export function Toolbar({ format, onFormatChange, onExport, onFindAndReplace, on
         icon={<span className="text-xs font-bold">🔍</span>}
         title="Find and Replace"
         onClick={onFindAndReplace}
+      />
+
+      {/* Merge Cells */}
+      <IconButton
+        size="sm"
+        icon={<span className="text-xs font-bold">⦿</span>}
+        title={canMerge ? 'Merge / Unmerge Cells' : 'Select multiple cells to merge'}
+        onClick={onMergeCells}
+        disabled={!canMerge}
       />
 
       <div className="flex-1" />

@@ -78,6 +78,15 @@ export interface AuthState {
 
 // ─── Write State ────────────────────────────────────────────────────────────
 
+// ─── Merge Types ────────────────────────────────────────────────────────────
+
+export interface MergedRegion {
+  startRow: number;
+  startCol: number;
+  endRow: number;
+  endCol: number;
+}
+
 export type WriteState = 'synced' | 'pending' | 'error';
 
 // ─── Formula Types ──────────────────────────────────────────────────────────

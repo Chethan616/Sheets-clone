@@ -12,7 +12,7 @@ import {
   HEADER_HEIGHT,
 } from '@/lib/utils';
 import { evaluateFormula, isFormula } from '@/lib/formula/evaluator';
-import type { CellMap, CellFormat, CellPosition, CellRange, UserPresence } from '@/lib/types';
+import type { CellMap, CellFormat, CellPosition, CellRange, UserPresence, MergedRegion } from '@/lib/types';
 
 interface GridProps {
   rowCount: number;
@@ -35,6 +35,7 @@ interface GridProps {
   onRowResize: (row: number, height: number) => void;
   columnOrder?: number[];
   onColumnReorder?: (from: number, to: number) => void;
+  mergedCells?: MergedRegion[];
 }
 
 export function Grid({
@@ -58,17 +59,16 @@ export function Grid({
   onColumnResize,
   onRowResize,
   onColumnReorder,
+  mergedCells = [],
 }: GridProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
-  const transitioningRef = useRef(false);
   const isSelectingRef = useRef(false);
 
-  // Reset transition flag when editing starts
+  // Ref to track that editing was initiated but React hasn't re-rendered yet (stale closure fix)
+  const pendingEditRef = useRef(false);
   useEffect(() => {
-    if (editingCell) {
-      transitioningRef.current = false;
-    }
+    pendingEditRef.current = false;
   }, [editingCell]);
 
   const [resizingCol, setResizingCol] = useState<number | null>(null);
@@ -153,12 +153,29 @@ export function Grid({
 
       const visualCol = getVisualIndex(activeCell.col);
 
-      // If editing, only handle Enter/Escape/Tab
-      if (editingCell) {
+      // Use ref to detect editing before React re-renders (stale closure fix)
+      const isCurrentlyEditing = editingCell || pendingEditRef.current;
+
+      if (isCurrentlyEditing) {
+        const inputEl = editInputRef.current;
+        const inputFocused = inputEl && document.activeElement === inputEl;
+
+        // Buffer printable keys when input is not focused yet
+        if (!inputFocused && e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          onEditChange((prev: string) => prev + e.key);
+          return;
+        }
+
+        if (!inputFocused && e.key === 'Backspace') {
+          e.preventDefault();
+          onEditChange((prev: string) => prev.slice(0, -1));
+          return;
+        }
+
         if (e.key === 'Enter') {
           e.preventDefault();
           onEditCommit();
-          // Move down
           if (activeCell.row + 1 < rowCount) {
             onCellSelect({ row: activeCell.row + 1, col: activeCell.col });
           }
@@ -231,18 +248,7 @@ export function Grid({
           // Start typing to edit
           if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
             e.preventDefault();
-            
-            // If we are already transitioning to edit mode but input isn't mounted yet,
-            // append the key to the state (optimistic update)
-            if (transitioningRef.current) {
-               if (typeof onEditChange === 'function') {
-                 // TS hack: we cast because we know it supports callback form now
-                 (onEditChange as any)((prev: string) => prev + e.key);
-               }
-               return;
-            }
-
-            transitioningRef.current = true;
+            pendingEditRef.current = true;
             onCellDoubleClick(activeCell);
             onEditChange(e.key);
           }
@@ -392,6 +398,43 @@ export function Grid({
     [cells]
   );
 
+  // ─── Merge cell helpers ──────────────────────────────────────────────
+  const getMergeForCell = useCallback(
+    (row: number, col: number): MergedRegion | null => {
+      return mergedCells.find(
+        (m) =>
+          row >= m.startRow &&
+          row <= m.endRow &&
+          col >= m.startCol &&
+          col <= m.endCol
+      ) || null;
+    },
+    [mergedCells]
+  );
+
+  const getMergedWidth = useCallback(
+    (region: MergedRegion): number => {
+      let w = 0;
+      for (let c = region.startCol; c <= region.endCol; c++) {
+        const vi = getVisualIndex(c);
+        w += getColWidth(vi);
+      }
+      return w;
+    },
+    [getVisualIndex, getColWidth]
+  );
+
+  const getMergedHeight = useCallback(
+    (region: MergedRegion): number => {
+      let h = 0;
+      for (let r = region.startRow; r <= region.endRow; r++) {
+        h += getRowHeight(r);
+      }
+      return h;
+    },
+    [getRowHeight]
+  );
+
   return (
     <div
       ref={parentRef}
@@ -475,6 +518,16 @@ export function Grid({
               const row = virtualRow.index;
               const col = getLogicalCol(virtualCol.index);
               const id = cellId(row, col);
+
+              // ── Merge cell logic ──────────────────────────────
+              const merge = getMergeForCell(row, col);
+              // If this cell is hidden by a merge (not the anchor), skip
+              if (merge && !(merge.startRow === row && merge.startCol === col)) {
+                return null;
+              }
+              const cellWidth = merge ? getMergedWidth(merge) : virtualCol.size;
+              const cellHeight = merge ? getMergedHeight(merge) : virtualRow.size;
+
               const isActive = activeCell?.row === row && activeCell?.col === col;
               const isEditing = editingCell?.row === row && editingCell?.col === col;
               const presenceUser = presenceCellMap[id];
@@ -492,25 +545,24 @@ export function Grid({
                   key={id}
                   className={cn(
                     'absolute border-b border-r border-outline-variant/20 text-xs leading-none',
-                    'transition-[border-color,box-shadow] duration-75', // faster transition
+                    'transition-[border-color,box-shadow] duration-75',
                     isActive && !isEditing && 'ring-2 ring-primary ring-inset z-[5]',
                     isEditing && 'ring-2 ring-primary ring-inset z-[6]',
                     presenceUser && !isActive && 'ring-2 ring-inset z-[4]',
-                    // Selection handling
                     isSelected && !isActive && !isEditing && 'bg-primary/20'
                   )}
                   style={{
                     left: virtualCol.start + HEADER_WIDTH,
                     top: virtualRow.start + HEADER_HEIGHT,
-                    width: virtualCol.size,
-                    height: virtualRow.size,
+                    width: cellWidth,
+                    height: cellHeight,
                     backgroundColor: isSelected && !isActive && !isEditing ? undefined : (format.bgColor || undefined),
+                    ...(merge ? { zIndex: 3 } : {}),
                     ...(presenceUser && !isActive
                       ? { '--tw-ring-color': presenceUser.color } as React.CSSProperties
                       : {}),
                   }}
                   onMouseDown={(e) => {
-                    // Start selection only on left click and not on resize handles
                     if (e.button === 0) handleCellMouseDown(row, col);
                   }}
                   onMouseEnter={() => handleCellMouseOver(row, col)}
@@ -521,11 +573,10 @@ export function Grid({
                       ref={editInputRef}
                       type="text"
                       value={editValue}
+                      onMouseDown={(e) => e.stopPropagation()}
                       onChange={(e) => onEditChange(e.target.value)}
                       onKeyDown={(e) => {
-                        // Stop propagation so container doesn't re-process
                         e.stopPropagation();
-                        
                         if (e.key === 'Enter') {
                           e.preventDefault();
                           onEditCommit();
@@ -561,7 +612,6 @@ export function Grid({
                     </div>
                   )}
 
-                  {/* Presence indicator tooltip */}
                   {presenceUser && !isActive && (
                     <div
                       className="absolute -top-5 left-0 z-10 whitespace-nowrap rounded-sm px-1.5 py-0.5 text-[10px] font-medium text-white"
