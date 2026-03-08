@@ -1,89 +1,101 @@
-# Sheets Clone 📊
+# Sheets Clone
 
-A high-performance, pixel-perfect Google Sheets clone built with **Next.js 15**, **React 19**, and **Tailwind CSS**. This application features real-time collaboration, complex formula evaluation, virtualized rendering for large datasets, and a modern Material 3 design system.
+A Google Sheets style web app built with Next.js 16, React 19, Tailwind CSS v4, and Firebase. It supports spreadsheet editing, formulas, real-time sync, formatting tools, selection ranges, column reordering, row and column resizing, duplicate cleanup, find and replace, and merged cells.
 
-![Dashboard Preview](./screenshots/dashboard.png)
-*(Recommended: Add a screenshot of the dashboard here showing the document grid)*
+## Preview
 
-## 🚀 Features
+### Login
 
-### Core Functionality
-- **High Performance Grid**: Powered by `@tanstack/react-virtual`, rendering thousands of cells at 60fps.
-- **Formula Engine**: Custom-built recursive descent parser supporting mathematical (`SUM`, `AVG`, `MAX`) and data quality (`TRIM`, `UPPER`, `LOWER`) functions.
-- **Cell Dependencies**: Formulas automatically update when referenced cells change.
-- **Rich Formatting**: Bold, Italic, Text Color, Background Color, and Alignment support.
+![Login](./screenshots/login.png)
 
-### ⚡ Real-Time Collaboration
-- **Multi-user Editing**: See changes from other users instantly using Firebase Firestore.
-- **Presence System**: View active users and their selection cursors/avatars in real-time.
-- **Conflict Resolution**: Optimistic UI updates with eventual consistency.
+### Dashboard
 
-### 🎨 UI/UX Excellence
-- **Drag & Drop**: Reorder columns intuitively by dragging headers.
-- **Resize**: Interactive column width and row height resizing.
-- **Selection**: Drag-to-select range support.
-- **Keyboard Navigation**: Full Excel-like keyboard support (Arrow keys, Tab, Enter, Shift+Select).
-- **Material Design 3**: Modern, accessible interface with light/dark mode support.
-- **Haptic Feedback**: Subtle vibration feedback for interactions on supported devices.
+![Dashboard Light](./screenshots/dashboard_light.png)
 
-![Editor Preview](./screenshots/editor.png)
-*(Recommended: Add a screenshot of the editor with active selection and formulas)*
+![Dashboard Dark](./screenshots/dashboard_dark.png)
 
-## 🛠️ Tech Stack
+### Spreadsheet Features
 
-- **Framework**: Next.js 15 (App Router)
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS v4, `clsx`, `tailwind-merge`
-- **State/Backend**: Firebase (Auth, Firestore)
-- **Virtualization**: `@tanstack/react-virtual`
-- **Icons**: `lucide-react`
-- **Animation**: `motion` (Framer Motion)
+![Feature 1](./screenshots/feature1.png)
 
-## 🏃‍♂️ Running Locally
+![Feature 2](./screenshots/feature2.png)
 
-1. **Clone the repository**
-   ```bash
-   git clone <repository-url>
-   cd sheets-clone
-   ```
+![Feature 3](./screenshots/feature3.png)
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+![Feature 4](./screenshots/feature4.png)
 
-3. **Set up Environment Variables**
-   Create a `.env.local` file with your Firebase configuration:
-   ```env
-   NEXT_PUBLIC_FIREBASE_API_KEY=...
-   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
-   NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
-   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
-   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
-   NEXT_PUBLIC_FIREBASE_APP_ID=...
-   ```
+![Feature 5](./screenshots/feature5.png)
 
-4. **Run the development server**
-   ```bash
-   npm run dev
-   ```
+## Features
 
-5. **Open http://localhost:3000**
+- Virtualized spreadsheet grid for large datasets.
+- Formula engine with support for `SUM`, `AVERAGE`, `COUNT`, `MIN`, `MAX`, `ABS`, `ROUND`, `IF`, `TRIM`, `UPPER`, and `LOWER`.
+- Formula auto-detection when users type functions directly into cells.
+- Rich formatting with bold, italic, text color, background color, and alignment.
+- Drag-to-select ranges and merge cells.
+- Column reordering plus row and column resizing.
+- Find and replace across populated cells.
+- Remove duplicates by column.
+- Real-time collaboration and presence indicators using Firebase.
+- Light and dark themes.
 
-## 📸 Screenshots to Add
+## Tech Stack
 
-To make this README pop, please take screenshots of the following and save them in a `screenshots` folder (create it if it doesn't exist):
+- Next.js 16 App Router
+- React 19
+- TypeScript
+- Tailwind CSS v4
+- Firebase Auth and Firestore
+- @tanstack/react-virtual
+- lucide-react
+- motion
 
-1. **`dashboard.png`**: The main screen showing the list of spreadsheets.
-2. **`editor.png`**: The grid view, ideally with some data, a formula visible in the bar, and a selected range.
-3. **`formatting.png`** (Optional): Showing the formatting toolbar and different cell styles.
+## Local Development
 
-## 🧪 Advanced Features Demonstrated
+1. Clone the repository.
+2. Install dependencies with `npm install`.
+3. Create `.env.local` with your Firebase client config:
 
-- **Recursive Recursive Descent Parser**: `src/lib/formula/parser.ts`
-- **Optimistic Updates**: `src/hooks/useCells.ts`
-- **Virtualized Grid**: `src/components/editor/Grid.tsx`
-- **Custom Presence Hook**: `src/hooks/usePresence.ts`
+```env
+NEXT_PUBLIC_FIREBASE_API_KEY=...
+NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN=...
+NEXT_PUBLIC_FIREBASE_PROJECT_ID=...
+NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=...
+NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=...
+NEXT_PUBLIC_FIREBASE_APP_ID=...
+NEXT_PUBLIC_FIREBASE_DATABASE_URL=...
+```
 
----
-*Built for the Trademarkia Frontend Engineering Assignment.*
+4. Start the app with `npm run dev`.
+5. Open `http://localhost:3000`.
+
+## GitHub Pages
+
+This repo is configured for GitHub Pages deployment through GitHub Actions. The static export is built from `next build`, and Pages will publish the generated `out` directory.
+
+Note: the document route uses a query string on Pages-compatible builds, for example `.../doc/?id=<document-id>`.
+
+Expected Pages URL for this repository:
+
+`https://chethan616.github.io/Sheets-clone/`
+
+Before the workflow can deploy successfully, add these GitHub repository secrets:
+
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `NEXT_PUBLIC_FIREBASE_DATABASE_URL`
+
+Also make sure GitHub Pages is set to use GitHub Actions as the build and deployment source.
+
+## Implementation Notes
+
+- Virtualized grid: `src/components/editor/Grid.tsx`
+- Editor state and spreadsheet actions: `src/components/editor/SpreadsheetEditor.tsx`
+- Formula parser and evaluator: `src/lib/formula`
+- Real-time document sync: `src/lib/firestore.ts` and `src/hooks`
+
+Built for the Trademarkia Frontend Engineering Assignment.

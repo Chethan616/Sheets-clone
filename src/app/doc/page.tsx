@@ -1,7 +1,7 @@
 'use client';
 
 import { useAuth } from '@/components/providers/AuthProvider';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { subscribeToDocument } from '@/lib/firestore';
 import { SpreadsheetEditor } from '@/components/editor/SpreadsheetEditor';
@@ -11,8 +11,8 @@ import type { SpreadsheetDocument } from '@/lib/types';
 export default function DocumentPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
-  const params = useParams();
-  const docId = params.id as string;
+  const searchParams = useSearchParams();
+  const docId = searchParams.get('id') ?? '';
 
   const [doc, setDoc] = useState<SpreadsheetDocument | null>(null);
   const [loading, setLoading] = useState(true);
@@ -24,10 +24,13 @@ export default function DocumentPage() {
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (!docId) return;
+    if (!docId) {
+      setLoading(false);
+      return;
+    }
 
-    const unsubscribe = subscribeToDocument(docId, (d) => {
-      setDoc(d);
+    const unsubscribe = subscribeToDocument(docId, (nextDoc) => {
+      setDoc(nextDoc);
       setLoading(false);
     });
 
@@ -38,6 +41,21 @@ export default function DocumentPage() {
     return (
       <div className="flex h-screen items-center justify-center bg-surface">
         <CircularLoading size="lg" />
+      </div>
+    );
+  }
+
+  if (!docId) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center gap-4 bg-surface">
+        <div className="text-6xl">📄</div>
+        <h1 className="text-xl font-medium text-on-surface">Missing document id</h1>
+        <button
+          onClick={() => router.push('/dashboard')}
+          className="rounded-full bg-primary px-6 py-2 text-sm font-medium text-on-primary"
+        >
+          Back to Dashboard
+        </button>
       </div>
     );
   }

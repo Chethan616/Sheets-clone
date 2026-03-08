@@ -21,7 +21,7 @@ export default function DashboardPage() {
     trigger('nudge');
     const id = await create();
     if (id) {
-      router.push(`/doc/${id}`);
+      router.push(`/doc?id=${encodeURIComponent(id)}`);
     }
   };
 
@@ -83,7 +83,7 @@ export default function DashboardPage() {
               <DocumentCard
                 key={doc.id}
                 doc={doc}
-                onClick={() => router.push(`/doc/${doc.id}`)}
+                onClick={() => router.push(`/doc?id=${encodeURIComponent(doc.id)}`)}
                 onRename={(title) => rename(doc.id, title)}
                 onDelete={() => remove(doc.id)}
               />
