@@ -14,17 +14,33 @@ A Google Sheets style web app built with Next.js 16, React 19, Tailwind CSS v4, 
 
 ![Dashboard Dark](./screenshots/dashboard_dark.png)
 
-### Spreadsheet Features
+### Toolbar
 
-![Feature 1](./screenshots/feature1.png)
+![Toolbar](./screenshots/topbar.png)
 
-![Feature 2](./screenshots/feature2.png)
+### Cell Formatting — Colors
 
-![Feature 3](./screenshots/feature3.png)
+![Colors](./screenshots/colors.png)
 
-![Feature 4](./screenshots/feature4.png)
+### Alignment
 
-![Feature 5](./screenshots/feature5.png)
+![Alignment](./screenshots/alignment%20feature.png)
+
+### Formulas
+
+![Formulas](./screenshots/formuale%20feaure.png)
+
+### Find & Replace
+
+![Find](./screenshots/find.png)
+
+### Remove Duplicates
+
+![Remove Duplicates](./screenshots/remove%20duplicates%20feature.png)
+
+### Export CSV / XLSX
+
+![Export](./screenshots/export%20as%20csv%20and%20xlxs%20feature.png)
 
 ## Features
 
